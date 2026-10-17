@@ -107,4 +107,5 @@ unchanged).  Patch against 2.4.19:
 
 (Alternative: avoid the 64 KiB stack frame in `httpPrintf()`.)
 
-Full patch + reproduction: <REPO URL>
+Full patch + reproduction + evidence:
+<https://github.com/vinod2807/musl-printing-stack>
