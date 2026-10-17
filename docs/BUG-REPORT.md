@@ -1,5 +1,8 @@
 # Draft upstream bug report
 
+**Filed as <https://github.com/OpenPrinting/cups/issues/1766>** — this file is
+kept as the source of the report that was submitted.
+
 Suggested title:
 
 > **`ipp` backend crashes (SIGSEGV) on musl: monitor thread uses the libc's

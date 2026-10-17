@@ -127,6 +127,9 @@ patch -p1 < patches/cups-2.4.19-thread-stacksize.patch
 
 An Alpine (`aports`) package could carry this as a normal APKBUILD patch.
 
+> Filed upstream as **OpenPrinting/cups#1766**:
+> <https://github.com/OpenPrinting/cups/issues/1766>
+
 ### 2. LD_PRELOAD shim — works today, no rebuild
 
 See [`workaround/ld-preload/`](workaround/ld-preload/). It gives threads created
