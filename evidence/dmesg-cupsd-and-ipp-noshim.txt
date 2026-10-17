@@ -1,0 +1,61 @@
+# Clean, shim-free reproduction: TWO processes crash, same instruction
+#
+# The LD_PRELOAD workaround was uninstalled (backend restored byte-identical to
+# the stock package file, shim deleted) and the printer queue was deleted and
+# rebuilt.  These are the faults that followed, with the kernel's own dump of
+# the faulting instruction.
+#
+# ---------------------------------------------------------------------------
+# 1) cupsd segfaults while CREATING the queue (`lpadmin -m everywhere`)
+# ---------------------------------------------------------------------------
+# Reproduced twice, on demand.  The client sees this because the scheduler dies
+# before answering:
+#
+#   $ lpadmin -p EPSON_L3260_ALPINE -E -v ipp://<host>/ipp/print -m everywhere
+#   lpadmin: Broken pipe
+#   $ lpstat -r
+#   scheduler is not running
+#   $ rc-service cupsd status
+#    * status: crashed
+#
+[ 3112.137213] cupsd[8994]: segfault at 7fdfb14160a0 ip 00007fdfb1db874d sp 00007fdfb14160a0 error 6 in libcups.so.2[3074d,7fdfb1da7000+44000] likely on CPU 2 (core 0, socket 0)
+[ 3205.223683] cupsd[9162]: segfault at 7fd7a9ade0a0 ip 00007fd7aa46c74d sp 00007fd7a9ade0a0 error 6 in libcups.so.2[3074d,7fd7aa45b000+44000] likely on CPU 1 (core 2, socket 0)
+#
+# The kernel's Code: dump for the first one.  The <48> 83 0c 24 00 is
+# `orq $0x0,(%rsp)` - the stack-clash probe in httpPrintf()'s prologue:
+#
+# Code: 00 83 f8 03 b8 0d 00 00 00 0f 44 c2 89 43 18 4c 89 e0 5b 5d 41 5c c3
+#       41 54 55 53 4c 8d 9c 24 00 00 ff ff 48 81 ec 00 10 00 00 <48> 83 0c 24
+#       00 4c 39 dc 75 ef 48 81 ec d0 00 00 00 48 89 94 24 30
+#
+#                    41 54              push   %r12
+#                    55                 push   %rbp
+#                    53                 push   %rbx
+# 4c 8d 9c 24 00 00 ff ff           lea    -0x10000(%rsp),%r11   ; 64 KiB frame
+# 48 81 ec 00 10 00 00              sub    $0x1000,%rsp
+# <48> 83 0c 24 00                   orq    $0x0,(%rsp)           ; <-- FAULT
+# 4c 39 dc                          cmp    %r11,%rsp
+# 75 ef                             jne    ...
+# 48 81 ec d0 00 00 00              sub    $0xd0,%rsp
+#
+# (Identical to the disassembly of libcups.so.2 at file offset 0x3073a.)
+#
+# ---------------------------------------------------------------------------
+# 2) the `ipp` backend segfaults while PRINTING
+# ---------------------------------------------------------------------------
+[ 3290.065126] ipp[9391]: segfault at 7f25d32eda50 ip 00007f25d3c4d74d sp 00007f25d32eda50 error 6 in libcups.so.2[3074d,7f25d3c3c000+44000] likely on CPU 1 (core 2, socket 0)
+#
+# ---------------------------------------------------------------------------
+# All three faults are the same instruction in the same library:
+#
+#   process  offset   error  sp == fault address?
+#   cupsd    0x3074d  6      yes
+#   cupsd    0x3074d  6      yes
+#   ipp      0x3074d  6      yes
+#
+# `error 6` = 0b110 -> user-mode write (bit 2) to a not-present page (bit 0).
+# `sp` equal to the faulting address is the signature of a stack probe (the
+# probe writes exactly at %rsp).
+#
+# Different processes, same fault: the common factor is the 128 KiB default
+# thread stack musl gives pthread_create(&thread, NULL, ...).

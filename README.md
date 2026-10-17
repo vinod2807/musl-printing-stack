@@ -23,6 +23,28 @@ The queue then displays a misleading status such as `Rendering completed`, and
 every job stays queued forever until the queue is re-enabled — at which point it
 crashes again immediately.
 
+### It is not only the printer backend — `cupsd` crashes too
+
+The same fault kills the **scheduler** while it is *creating* a driverless
+queue, so on a musl system you cannot even set printing up:
+
+```console
+$ sudo lpadmin -p QUEUE -E -v ipp://host/ipp/print -m everywhere
+lpadmin: Broken pipe
+$ lpstat -r
+scheduler is not running            # rc-service cupsd status -> crashed
+$ sudo dmesg | grep cupsd
+cupsd[8994]: segfault at ... error 6 in libcups.so.2[3074d,...]
+```
+
+`scheduler/ipp.c` generates the PPD in a background thread started with a
+default stack — `create_local_bg_thread()` at `ipp.c:2697` and `ipp.c:5809` —
+and that thread reaches the same ~65 KiB `httpPrintf()` frame.  Both call sites
+are unconditional on the printer-add path.  Three faults (`cupsd` ×2,
+`ipp` ×1) share the identical signature: `error 6`, `sp ==` fault address, and
+libcups offset `0x3074d`.  Full run:
+[`docs/CLEAN-REINSTALL-TEST.md`](docs/CLEAN-REINSTALL-TEST.md).
+
 ## Affected
 
 | | |
@@ -91,6 +113,9 @@ stack is exhausted → SIGSEGV.
 | [`evidence/source-excerpts.txt`](evidence/source-excerpts.txt) | The offending source lines |
 | [`evidence/gdb-backtrace.txt`](evidence/gdb-backtrace.txt) | Backtrace showing the spawned monitor thread |
 | [`evidence/environment.txt`](evidence/environment.txt) | Environment + measured 128 KiB default stack |
+| [`evidence/dmesg-cupsd-and-ipp-noshim.txt`](evidence/dmesg-cupsd-and-ipp-noshim.txt) | **shim-free run**: `cupsd` ×2 and `ipp` ×1, all at libcups offset `0x3074d`, with the kernel's own `Code:` dump of the faulting probe |
+| [`evidence/error-log-job7-noshim.txt`](evidence/error-log-job7-noshim.txt) | **shim-free job**: `status -11 (crashed)`, queue paused, nothing reached the printer |
+| [`docs/CLEAN-REINSTALL-TEST.md`](docs/CLEAN-REINSTALL-TEST.md) | clean-reinstall A/B procedure and results |
 
 The faulting instruction (`ip = libcups+0x3074d`) is the compiler's stack-clash
 probe inside `httpPrintf`:

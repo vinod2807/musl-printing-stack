@@ -89,6 +89,48 @@ gdb (crash is in a spawned thread, not main()):
 The code is unchanged in `v2.4.20` (latest release) and on `master`
 (`_cupsThreadCreate` was only renamed to `cupsThreadCreate`).
 
+### The scheduler is affected too
+
+The same fault kills `cupsd` itself while it *creates* a driverless queue, so on
+musl the queue cannot be created in the first place:
+
+```console
+$ sudo lpadmin -p QUEUE -E -v ipp://host/ipp/print -m everywhere
+lpadmin: Broken pipe
+$ lpstat -r
+scheduler is not running
+$ sudo rc-service cupsd status
+ * status: crashed
+```
+
+`scheduler/ipp.c` generates the PPD in a background thread created with a
+default stack:
+
+```c
+/* ipp.c:2692 — the ppd-name="everywhere" case, i.e. `lpadmin -m everywhere` */
+cupsdLogClient(con, CUPSD_LOG_DEBUG, "Creating PPD in background thread.");
+con->bg_pending = 1;
+con->bg_printer = printer;
+_cupsThreadCreate((_cups_thread_func_t)create_local_bg_thread, con);
+```
+
+```c
+/* ipp.c:5270 */
+ * 'create_local_bg_thread()' - Background thread for creating a local print queue.
+    char device_uri[1024], fromppd[1024], toppd[1024], scheme[32],
+         userpass[256], host[256], resource[1024], uri[1024], line[1024];
+```
+
+Both call sites (`ipp.c:2697` and `ipp.c:5809`) are unconditional on the
+printer-add path.  Three crashes — `cupsd` ×2 and `ipp` ×1 — share the identical
+signature (`error 6`, `sp` == faulting address, libcups offset `0x3074d`), and
+the kernel's `Code:` dump shows the same `orq $0x0,(%rsp)` probe:
+
+```
+Code: ... 41 54 55 53 4c 8d 9c 24 00 00 ff ff 48 81 ec 00 10 00 00 <48> 83 0c 24 00 4c 39 dc 75 ef ...
+                                               sub $0x1000,%rsp   orq $0x0,(%rsp)
+```
+
 ### Suggested fix
 
 Make `_cupsThreadCreate()` / `cupsThreadCreate()` ensure a usable stack size,

@@ -1,0 +1,35 @@
+# Scheduler log for the shim-free printing test (job EPSON_L3260_ALPINE-7)
+#
+# Procedure: shim removed, backend restored to the stock package file, queue
+# rebuilt with the driverless PPD, then the original gThumb job resubmitted:
+#
+#   $ lp -d EPSON_L3260_ALPINE original-job3.pdf
+#   request id is EPSON_L3260_ALPINE-7 (1 file(s))
+#
+# Two seconds later the queue was disabled, with the usual misleading status
+# text ("Rendering completed").  From /var/log/cups/error_log:
+#
+D [17/Oct/2026:14:39:15 +0000] [Job 7] PID 9388 (/usr/lib/cups/backend/ipp) crashed on signal 11.
+W [17/Oct/2026:14:39:16 +0000] [Job 7] Backend ipp returned status -11 (crashed)
+I [17/Oct/2026:14:39:16 +0000] [Job 7] Printer stopped due to backend errors; please consult the /var/log/cups/error_log file for details.
+D [17/Oct/2026:14:39:16 +0000] [Job 7] printer-state-reasons=paused
+#
+# Resulting state:
+#
+#   $ lpstat -p EPSON_L3260_ALPINE
+#   printer EPSON_L3260_ALPINE disabled since Sat Oct 17 14:39:16 2026 -
+#           Rendering completed
+#   $ lpstat -o EPSON_L3260_ALPINE
+#   EPSON_L3260_ALPINE-7    vinod          1273856   Sat Oct 17 14:39:14 2026
+#   $ lpstat -W completed -o EPSON_L3260_ALPINE
+#   (empty - the job never completed)
+#
+# Nothing reached the printer.  Querying the device itself shows only the
+# earlier jobs, so no paper was consumed by this failure:
+#
+#   $ ipptool -tv ipp://192.168.1.19/ipp/print getjobs.test
+#   job-id = 5 / "socket-backend-test" / completed
+#   job-id = 4 / "gThumb job #1"      / completed
+#
+# The crash happens in the `ipp` backend's monitor thread before the document
+# is ever submitted, which is why a failing job consumes no paper.
