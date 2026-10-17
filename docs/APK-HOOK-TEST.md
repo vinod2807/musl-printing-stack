@@ -80,6 +80,42 @@ transaction costs two file tests and touches nothing.
 * The hook always exits 0, so a broken workaround can never fail an apk
   transaction.
 
+## Does the hook fire on a *general* upgrade?
+
+Yes. apk commit hooks are attached to the **commit step**, not to a particular
+operation, so any real transaction triggers them: `apk upgrade` (whole system or
+a single package), `apk add`, `apk del`, `apk fix`. There is nothing
+cups-specific about the mechanism.
+
+Verified with a purpose-built throwaway package (`stackfix-dummy` 1.0.0/1.0.1 in
+a scratch local repository — since this machine has pending `ghostscript` and
+`linux-lts` updates, running a real system-wide `apk upgrade` just to test would
+have installed them):
+
+| apk operation | wrapper clobbered beforehand | hook fired? | result |
+|---|---|---|---|
+| `apk fix cups` (the upgrade-shaped transaction) | yes | **yes** | repaired |
+| `apk fix logrotate` (unrelated transaction) | yes | **yes** | repaired |
+| `apk add <file>.apk` | yes | **yes** | repaired |
+| `apk upgrade <pkg>` (literal upgrade subcommand) | yes | **yes** | repaired |
+| `apk upgrade <pkg> --simulate` | yes | **no** | left broken (no commit happened) |
+| `apk upgrade` / `apk fix` with the fix already healthy | no | yes (runs) | **no-op** — no log entry, no cupsd restart |
+
+Two things worth noting from that table:
+
+* The `--simulate` row is the useful control: it proves the repair really comes
+  from the commit hook rather than from anything else on the system, because the
+  identical command without `--simulate` does repair.
+* The hook runs for **every** real transaction, even one that changes nothing
+  (a real `apk upgrade` that has nothing to do still reaches the commit step).
+  That is harmless precisely because of the fast path: the hook re-checks and
+  short-circuits, so routine apk use costs two file tests and restarts nothing.
+
+Because a hook runs at *post*-commit, on a large system-wide upgrade `cups` may
+be overwritten early and the wrapper re-armed only at the end of the
+transaction. Nothing normally prints inside that window, and any print attempt
+afterwards finds a working backend.
+
 ## Limitation
 
 This covers any change made *through apk* (`upgrade`, `fix`, reinstall of
