@@ -144,6 +144,39 @@ Because CUPS sanitises the environment of the processes it spawns, the shim
 cannot be injected with a plain `LD_PRELOAD`; the installer therefore wraps the
 `ipp` backend (real backend is kept as `/usr/lib/cups/backend/ipp.real`).
 
+> ### ⚠️ This silently stops working when `cups` is upgraded
+>
+> `/usr/lib/cups/backend/ipp` is **owned by the `cups` package**
+> (`apk info --who-owns /usr/lib/cups/backend/ipp` → `cups-2.4.19-r0`).  apk
+> simply unpacks the new package over it: `/usr/lib/cups/backend/ipp` is not a
+> protected config path (only `/etc` gets `.apk-new` handling), so there is no
+> warning, no `.apk-new` file, and no error.  The wrapper is gone, the shim is
+> never loaded again, and your queue goes back to being paused by
+> `Backend ipp returned status -11 (crashed)` — with the same misleading status
+> text as before, so it is easy not to connect the two.
+>
+> Check and repair:
+>
+> ```sh
+> ./scripts/check-stackfix.sh                  # exit 0 = healthy, 1 = broken
+> sudo ./workaround/ld-preload/install.sh      # re-install; idempotent
+> ```
+>
+> `install.sh` is safe to re-run: the wrapper embeds a marker string, so the
+> installer can tell its own wrapper from a genuine backend and refresh
+> `ipp.real` after an upgrade instead of copying the wrapper over it.  It also
+> renames a temporary file into place rather than writing over `ipp.real`
+> directly, because writing onto a file that a still-running backend is
+> executing fails with `ETXTBSY` ("Text file busy").
+>
+> The shim in `/usr/local/lib` is *not* touched by apk (no package owns it) but
+> is useless on its own.
+>
+> **The upstream patch (option 1) has no such problem**: the fix is compiled
+> into `libcups.so.2` (which provides the exported `_cupsThreadCreate` that the
+> `ipp` backend calls), so the package apk installs already contains it and
+> there is nothing to re-install.
+
 ### 3. `socket://` (raw port 9100) — ✗ NOT a fix
 
 Switching the queue to `socket://<host>:9100` avoids the crashing monitor thread,

@@ -11,6 +11,12 @@
  * Shim:         /usr/local/lib/cups-thread-stackfix.so
  *
  * Build:  cc -O2 -Wall -o ipp-wrapper ipp-wrapper.c
+ *
+ * NOTE: the MARKER below is embedded in the binary on purpose.  install.sh and
+ * uninstall.sh grep for it to tell "our wrapper" apart from the genuine backend
+ * installed by the "cups" package.  Without it, a re-install after a package
+ * upgrade would happily copy our own wrapper over the real backend.
+ * Do not remove it.
  */
 #include <unistd.h>
 #include <stdlib.h>
@@ -18,9 +24,13 @@
 #define REAL_BACKEND "/usr/lib/cups/backend/ipp.real"
 #define PRELOAD_SO   "/usr/local/lib/cups-thread-stackfix.so"
 
+/* Must match MARKER in install.sh and uninstall.sh. */
+const char *cups_thread_stackfix_marker = "cups-thread-stackfix-wrapper";
+
 int main(int argc, char **argv)
 {
   (void)argc;
+  (void)cups_thread_stackfix_marker;
 
   setenv("LD_PRELOAD", PRELOAD_SO, 1);
 

@@ -48,8 +48,14 @@ usable stack WITH shim:    8204 KiB
 
 ## Caveats
 
-* A `cups` package upgrade replaces `/usr/lib/cups/backend/ipp`, silently
-  removing the wrapper.  Re-run `install.sh` after such an upgrade
-  (or use the upstream patch instead).
+* **A `cups` package upgrade silently breaks this.**  `/usr/lib/cups/backend/ipp`
+  is owned by the `cups` package, so apk unpacks the new backend straight over
+  our wrapper — no warning, no `.apk-new`.  The shim is then never loaded and
+  the queue goes back to being paused with `status -11 (crashed)`.
+  Run `../../scripts/check-stackfix.sh` to test, then re-run `install.sh` to
+  repair.  Both are safe to re-run.
+* `install.sh` writes `ipp.real` via a temporary file + rename.  Writing onto it
+  directly fails with `ETXTBSY` ("Text file busy") whenever a backend process is
+  still executing it, which is common right after an upgrade.
 * Only affects threads created with `pthread_create(..., NULL, ...)`; threads
   that pass explicit attributes are untouched.

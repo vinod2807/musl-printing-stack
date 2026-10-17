@@ -1,7 +1,6 @@
 #!/bin/sh
 #
-# Undo install.sh.
-# Run as root.
+# Undo install.sh.  Run as root.
 #
 set -e
 
@@ -9,12 +8,16 @@ PREFIX=${PREFIX:-/usr/local}
 BACKEND=${BACKEND:-/usr/lib/cups/backend/ipp}
 SO="$PREFIX/lib/cups-thread-stackfix.so"
 
+MARKER=cups-thread-stackfix-wrapper
+
 [ "$(id -u)" = 0 ] || { echo "error: run as root" >&2; exit 1; }
 
 echo "== restoring $BACKEND =="
-if [ -e "$BACKEND.real" ]; then
+if grep -aq "$MARKER" "$BACKEND" 2>/dev/null && [ -e "$BACKEND.real" ]; then
   rm -f "$BACKEND"
   mv "$BACKEND.real" "$BACKEND"
+else
+  echo "   $BACKEND is not our wrapper; leaving it alone"
 fi
 
 echo "== removing $SO =="
