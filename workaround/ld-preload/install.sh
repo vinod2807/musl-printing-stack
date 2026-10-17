@@ -16,8 +16,17 @@ MARKER=cups-thread-stackfix-wrapper
 [ "$(id -u)" = 0 ] || { echo "error: run as root" >&2; exit 1; }
 
 echo "== building =="
-$CC -O2 -Wall -shared -fPIC -o thread-stackfix.so thread-stackfix.c -ldl
-$CC -O2 -Wall -o ipp-wrapper ipp-wrapper.c
+if [ "${PREBUILT:-0}" = 1 ]; then
+  # Used when no C compiler is available; artifacts come from the cache.
+  [ -f thread-stackfix.so ] && [ -f ipp-wrapper ] || {
+    echo "error: PREBUILT=1 but thread-stackfix.so/ipp-wrapper are missing" >&2
+    exit 1
+  }
+  echo "   using prebuilt artifacts"
+else
+  $CC -O2 -Wall -shared -fPIC -o thread-stackfix.so thread-stackfix.c -ldl
+  $CC -O2 -Wall -o ipp-wrapper ipp-wrapper.c
+fi
 
 if ! grep -aq "$MARKER" ipp-wrapper; then
   echo "error: built wrapper has no marker - refusing to install" >&2
@@ -52,10 +61,12 @@ chmod 0755 "$BACKEND.real"
 install -m 0755 ipp-wrapper "$BACKEND"
 
 echo "== restarting cupsd =="
+# Non-fatal: the files are already in place, so a failure here (e.g. cupsd not
+# running yet, as during a boot hook) must not abort the install.
 if command -v rc-service >/dev/null 2>&1; then
-  rc-service cupsd restart
+  rc-service cupsd restart || echo "   warning: could not restart cupsd (it will pick this up on next start)"
 elif command -v systemctl >/dev/null 2>&1; then
-  systemctl restart cups
+  systemctl restart cups || echo "   warning: could not restart cups"
 else
   echo "please restart cupsd manually"
 fi

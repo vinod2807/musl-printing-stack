@@ -53,7 +53,8 @@ usable stack WITH shim:    8204 KiB
   our wrapper — no warning, no `.apk-new`.  The shim is then never loaded and
   the queue goes back to being paused with `status -11 (crashed)`.
   Run `../../scripts/check-stackfix.sh` to test, then re-run `install.sh` to
-  repair.  Both are safe to re-run.
+  repair — or just use the top-level `fix-cups-stack.sh` (= `cups-stackfix`),
+  which detects and repairs in one step.
 * `install.sh` writes `ipp.real` via a temporary file + rename.  Writing onto it
   directly fails with `ETXTBSY` ("Text file busy") whenever a backend process is
   still executing it, which is common right after an upgrade.

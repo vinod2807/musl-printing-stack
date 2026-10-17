@@ -139,6 +139,24 @@ usable stack WITH shim:    8204 KiB
 
 ## Fixes / workarounds
 
+Whichever you choose, the bundled [`fix-cups-stack.sh`](fix-cups-stack.sh)
+(= `cups-stackfix`) keeps the workaround alive and is meant to be re-run after
+every `apk upgrade cups`:
+
+```sh
+sudo cups-stackfix              # (re-)apply the fix; re-enable paused queues
+cups-stackfix --check           # is it still active?  exit 0 = yes, 1 = clobbered
+sudo cups-stackfix --boot-hook  # optional: also self-heal on every boot
+```
+
+It is idempotent (a no-op when the fix is already active), rebuilds from source
+when a compiler is present, falls back to a cached build when one is not, and
+re-enables any queue that CUPS paused.  Install it with:
+
+```sh
+sudo ln -sf "$PWD/fix-cups-stack.sh" /usr/local/bin/cups-stackfix
+```
+
 ### 1. Upstream patch — recommended
 
 See [`patches/cups-2.4.19-thread-stacksize.patch`](patches/cups-2.4.19-thread-stacksize.patch).

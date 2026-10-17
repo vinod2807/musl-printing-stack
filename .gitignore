@@ -3,3 +3,4 @@ ipp-wrapper
 shimcheck
 *.o
 *.so
+.cache/
