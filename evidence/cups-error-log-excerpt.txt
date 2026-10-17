@@ -1,0 +1,13 @@
+W [17/Oct/2026:13:36:38 +0000] [Job 3] Backend ipp returned status -11 (crashed)
+D [17/Oct/2026:13:36:38 +0000] [Job 3] PID 31503 (/usr/lib/cups/backend/ipp) crashed on signal 11.
+D [17/Oct/2026:13:36:38 +0000] [Job 3] PID 31502 (/usr/lib/cups/filter/rastertopwg) did not catch or ignore signal 13.
+D [17/Oct/2026:13:36:38 +0000] [Job 3] Printer stopped due to backend errors; please consult the /var/log/cups/error_log file for details.
+D [17/Oct/2026:13:36:38 +0000] [Job 3] printer-state-reasons=paused
+W [17/Oct/2026:13:38:28 +0000] [Job 3] Backend ipp returned status -11 (crashed)
+D [17/Oct/2026:13:38:28 +0000] [Job 3] PID 1572 (/usr/lib/cups/filter/rastertopwg) did not catch or ignore signal 13.
+D [17/Oct/2026:13:38:28 +0000] [Job 3] PID 1573 (/usr/lib/cups/backend/ipp) crashed on signal 11.
+D [17/Oct/2026:13:38:28 +0000] [Job 3] Printer stopped due to backend errors; please consult the /var/log/cups/error_log file for details.
+D [17/Oct/2026:13:38:28 +0000] [Job 3] printer-state-reasons=paused
+D [17/Oct/2026:13:55:49 +0000] [Job 3] PID 5319 (/usr/lib/cups/filter/rastertopwg) did not catch or ignore signal 13.
+D [17/Oct/2026:13:55:49 +0000] [Job 3] Printer stopped due to backend errors; please consult the /var/log/cups/error_log file for details.
+D [17/Oct/2026:13:55:49 +0000] [Job 3] printer-state-reasons=paused

@@ -1,0 +1,36 @@
+--- a/cups/thread.c
++++ b/cups/thread.c
+@@ -178,9 +178,31 @@
+     _cups_thread_func_t func,		/* I - Entry point */
+     void                *arg)		/* I - Entry point context */
+ {
+-  pthread_t thread;
++  pthread_t	thread;			/* Thread ID */
++  pthread_attr_t attr;			/* Thread attributes */
++  size_t	stacksize;		/* Default stack size */
++  int		status;			/* pthread_create status */
+ 
+-  if (pthread_create(&thread, NULL, (void *(*)(void *))func, arg))
++
++  pthread_attr_init(&attr);
++
++ /*
++  * Some libcs (notably musl, used by Alpine Linux) default to a very small
++  * 128 KiB thread stack, which is not enough for the CUPS code that runs in
++  * these threads - for example httpPrintf() uses a 64 KiB stack buffer (see
++  * cups/http.c) and the "ipp" backend's monitor thread reaches it through
++  * cupsDoRequest().  glibc defaults to 8 MiB, so only raise the size when the
++  * default is too small.
++  */
++
++  if (!pthread_attr_getstacksize(&attr, &stacksize) && stacksize < 1024 * 1024)
++    pthread_attr_setstacksize(&attr, 8 * 1024 * 1024);
++
++  status = pthread_create(&thread, &attr, (void *(*)(void *))func, arg);
++
++  pthread_attr_destroy(&attr);
++
++  if (status)
+     return (0);
+   else
+     return (thread);

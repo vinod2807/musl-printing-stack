@@ -1,0 +1,42 @@
+===== backend/ipp.c (CUPS 2.4.19) - the monitor thread is started here =====
+  }
+
+  _cupsThreadCreate((_cups_thread_func_t)monitor_printer, &monitor);
+
+
+===== cups/thread.c - _cupsThreadCreate() (POSIX implementation) =====
+ * '_cupsThreadCreate()' - Create a thread.
+ */
+
+_cups_thread_t				/* O - Thread ID */
+_cupsThreadCreate(
+    _cups_thread_func_t func,		/* I - Entry point */
+    void                *arg)		/* I - Entry point context */
+{
+  pthread_t thread;
+
+  if (pthread_create(&thread, NULL, (void *(*)(void *))func, arg))
+    return (0);
+  else
+    return (thread);
+}
+
+
+/*
+ * '_cupsThreadDetach()' - Tell the OS that the thread is running independently.
+ */
+
+void
+_cupsThreadDetach(_cups_thread_t thread)/* I - Thread ID */
+
+===== cups/thread-private.h =====
+extern _cups_thread_t _cupsThreadCreate(_cups_thread_func_t func, void *arg) _CUPS_PRIVATE;
+
+===== cups/http.c - httpPrintf() has a 64 KiB stack buffer =====
+httpPrintf(http_t     *http,		/* I - HTTP connection */
+           const char *format,		/* I - printf-style format string */
+	   ...)				/* I - Additional args as needed */
+{
+  ssize_t	bytes;			/* Number of bytes to write */
+  char		buf[65536];		/* Buffer for formatted string */
+  va_list	ap;			/* Variable argument pointer */

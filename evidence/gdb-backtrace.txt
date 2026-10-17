@@ -1,0 +1,52 @@
+# Backtrace of the crashing CUPS "ipp" backend
+#
+# Obtained with (gdb 16.3, Alpine musl):
+#
+#   sudo env DEVICE_URI=ipp://192.168.1.19/ipp/print \
+#            CUPS_SERVERBIN=/usr/lib/cups \
+#        gdb -q -batch \
+#            -ex 'set pagination off' -ex run -ex 'bt 35' \
+#            --args /usr/lib/cups/backend/ipp 999 vinod manual 1 \
+#                   "document-format=image/urf" /tmp/urf.bin
+#
+# ... DEBUG output omitted ...
+
+DEBUG: IPP/2.0 Validate-Job #2
+DEBUG: ---- operation-attributes-tag ----
+DEBUG: attributes-charset charset utf-8
+DEBUG: attributes-natural-language naturalLanguage en
+DEBUG: printer-uri uri ipp://192.168.1.19:631/ipp/print
+DEBUG: requesting-user-name nameWithoutLanguage vinod
+DEBUG: job-name nameWithoutLanguage manual
+DEBUG: document-format mimeMediaType application/octet-stream
+DEBUG: ---- end-of-attributes-tag ----
+DEBUG: IPP/2.0 Get-Printer-Attributes #3
+DEBUG: ---- operation-attributes-tag ----
+DEBUG: attributes-charset charset utf-8
+DEBUG: attributes-natural-language naturalLanguage en
+DEBUG: printer-uri uri ipp://192.168.1.19:631/ipp/print
+DEBUG: requesting-user-name nameWithoutLanguage vinod
+DEBUG: requested-attributes 1setOf keyword compression-supported,copies-supported,cups-version,document-format-supported,job-password-encryption-supported,marker-colors,marker-high-levels,marker-levels,marker-low-levels,marker-message,marker-names,marker-types,media-col-supported,multiple-document-handling-supported,operations-supported,print-color-mode-supported,print-scaling-supported,printer-alert,printer-alert-description,printer-is-accepting-jobs,printer-mandatory-job-attributes,printer-state,printer-state-message,printer-state-reasons
+DEBUG: ---- end-of-attributes-tag ----
+
+Thread 2 "ipp" received signal SIGSEGV, Segmentation fault.
+[Switching to LWP 4248]
+0x00007ffff7ef574d in httpPrintf () from /usr/lib/libcups.so.2
+#0  0x00007ffff7ef574d in httpPrintf () from /usr/lib/libcups.so.2
+#1  0x00007ffff7ef5a15 in ?? () from /usr/lib/libcups.so.2
+#2  0x00007ffff7ef5cfb in ?? () from /usr/lib/libcups.so.2     <- httpOptions()
+#3  0x00007ffff7f06dd8 in cupsSendRequest () from /usr/lib/libcups.so.2
+#4  0x00007ffff7f070d6 in cupsDoIORequest () from /usr/lib/libcups.so.2
+#5  0x000055555555d239 in ?? ()                                <- backend/ipp (monitor_printer)
+#6  0x000055555555d3d1 in ?? ()                                <- backend/ipp
+#7  0x00007ffff7fbef6d in start (p=<optimized out>) at src/thread/pthread_create.c:207
+#8  0x00007ffff7fc08c0 in __clone () at src/thread/x86_64/clone.s:22
+Backtrace stopped: frame did not save the PC
+
+# Interpretation
+# --------------
+# * Frame #7/#8 are musl's pthread entry point, so the crash happens in a
+#   *spawned thread* (the "ipp" backend's monitor_printer()), not on main().
+# * #3/#4 are the CUPS request helpers; #0/#1/#2 are the HTTP request builder.
+# * There is NO recursion: a single call chain exhausts the 128 KiB thread
+#   stack because httpPrintf() alone reserves a 64 KiB frame.

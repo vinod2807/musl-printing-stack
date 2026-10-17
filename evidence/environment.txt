@@ -1,0 +1,20 @@
+# Environment where the bug was reproduced
+
+OS          : 3.24.2 (Alpine Linux)
+Kernel      : Linux 6.18.56-0-lts
+Arch        : x86_64
+libc        : musl 1.2.6-r2
+CUPS        : 2.4.19
+cups pkg    : cups-2.4.19-r0
+filters pkg : cups-filters-1.28.17-r9
+compiler    : gcc (Alpine 15.2.0) 15.2.0
+
+# Printer
+Model       : EPSON L3260 Series (IPP Everywhere / AirPrint)
+Firmware    : 05.24.XE13Q2
+IPP URI     : ipp://192.168.1.19/ipp/print
+Preferred   : image/urf (Apple Raster)
+
+# Measured default pthread stack size
+musl default thread stack (pthread_attr_getstacksize on default attr): 131072 bytes (128 KiB)
+(glibc's default is 8 MiB)

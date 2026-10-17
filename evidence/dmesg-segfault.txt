@@ -1,0 +1,15 @@
+# Segfaults recorded in the kernel log (dmesg)
+#
+# NOTE: the ring buffer had already rolled by the time this repo was assembled,
+# so these are the messages recorded live during the original debugging session.
+#
+# Format: <time> <comm>[<pid>]: segfault at <addr> ip <ip> sp <sp> error <code> in <lib>[<off>,<base>+<size>] [cpu]
+#
+# "error 6" = 0b110 => user-mode write (bit 2) to a not-present page (bit 0).
+# "sp <sp>" equals the faulting address, and "ip" is inside libcups.so.2 at the
+# same low offset every time (0x3074d) => a stack overflow, in one specific
+# instruction (the stack-clash probe in httpPrintf()).
+#
+[19236.779724] ipp[31505]: segfault at 7fa460679a50 ip 00007fa460fda74d sp 00007fa460679a50 error 6 in libcups.so.2[3074d,7fa460fc9000+44000] likely on CPU 1 (core 2, socket 0)
+[19346.927728] ipp[1575]: segfault at 7fb3e18e0a50 ip 00007fb3e224174d sp 00007fb3e18e0a50 error 6 in libcups.so.2[3074d,7fb3e2230000+44000] likely on CPU 2 (core 0, socket 0)
+[19408.332103] ipp[1824]: segfault at 7faccf715a50 ip 00007facd006b74d sp 00007faccf715a50 error 6 in libcups.so.2[3074d,7facd005a000+44000] likely on CPU 3 (core 2, socket 0)

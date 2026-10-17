@@ -1,0 +1,5 @@
+thread-stackfix.so
+ipp-wrapper
+shimcheck
+*.o
+*.so
