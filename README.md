@@ -147,6 +147,9 @@ Whichever you choose, the bundled [`fix-cups-stack.sh`](fix-cups-stack.sh)
 # install the command once
 sudo ln -sf "$PWD/fix-cups-stack.sh" /usr/local/bin/cups-stackfix
 
+# optional: the short names 'fixcups' (repair) and 'cupsok' (check)
+sudo cups-stackfix --commands
+
 # and then never think about it again: apk runs this hook after every
 # transaction, so a `cups` upgrade repairs itself before anything can fail
 sudo cups-stackfix --apk-hook
@@ -156,6 +159,16 @@ sudo cups-stackfix              # (re-)apply the fix; re-enable paused queues
 cups-stackfix --check           # is it still active?  exit 0 = yes, 1 = clobbered
 sudo cups-stackfix --boot-hook  # alternative self-heal, at boot instead of at apk time
 ```
+
+> **`fixcups`/`cupsok` are real executables in `/usr/local/bin`, not shell
+> aliases.** Aliases only exist in the shell that read the file that defines
+> them, and on Alpine that is `~/.profile` — which only *login* shells read
+> (`ENV` is unset, so there is no rc file for interactive non-login shells).
+> An alias added to `~/.profile` is therefore invisible in an ordinary terminal
+> and in scripts, and stays invisible until the next login even though the file
+> says otherwise. A file on `PATH` works in every shell, immediately, with no
+> re-login — which is why `--commands` writes executables. They call the script
+> by absolute path, so they do not depend on `PATH` either.
 
 ### Why `apk upgrade cups` breaks it, and how the hook fixes that
 

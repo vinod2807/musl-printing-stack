@@ -28,9 +28,18 @@
 #   cups-stackfix --no-enable     do not re-enable paused queues
 #   cups-stackfix --apk-hook      install the apk commit hook (do it once!)
 #   cups-stackfix --no-apk-hook   remove that hook
+#   cups-stackfix --commands      install the short names fixcups/cupsok
+#   cups-stackfix --no-commands   remove them
 #   cups-stackfix --boot-hook     also install a boot-time self-heal
 #   cups-stackfix --no-boot-hook  remove that boot-time self-heal
 #   cups-stackfix -q|--quiet      less chatty
+#
+# NOTE ON SHORT NAMES
+#   `fixcups` and `cupsok` are installed as real executables in /usr/local/bin,
+#   NOT as shell aliases.  Aliases only exist in shells that read the file they
+#   are defined in - on Alpine that is just ~/.profile, i.e. login shells - so
+#   they are invisible in an ordinary terminal and in scripts.  A file on PATH
+#   works everywhere, immediately, with no re-login.
 #
 # IF YOU NEVER WANT TO THINK ABOUT THIS AGAIN
 #   sudo cups-stackfix --apk-hook
@@ -58,11 +67,14 @@ APK_HOOK_DIR=${APK_HOOK_DIR:-/etc/apk/commit_hooks.d}
 APK_HOOK_NAME=cups-stackfix
 APK_HOOK_SRC="$ROOT/hooks/apk-commit-hook-cups-stackfix.sh"
 
+BIN_DIR=${BIN_DIR:-/usr/local/bin}
+
 mode=fix
 quiet=0
 enable=1
 boot=0
 apk=0
+cmds=0
 
 usage() {
   cat <<'EOF'
@@ -73,6 +85,8 @@ cups-stackfix - re-apply the musl thread-stack workaround for CUPS
   cups-stackfix --no-enable     do not re-enable paused queues
   cups-stackfix --apk-hook      install the apk commit hook (do it once!)
   cups-stackfix --no-apk-hook   remove that hook
+  cups-stackfix --commands      install the short names fixcups/cupsok
+  cups-stackfix --no-commands   remove them
   cups-stackfix --boot-hook     also install a boot-time self-heal
   cups-stackfix --no-boot-hook  remove that boot-time self-heal
   cups-stackfix -q|--quiet      less chatty
@@ -83,6 +97,10 @@ has to be re-applied.  Either run this script again, or install the hook once
 and let it repair itself:
 
   sudo cups-stackfix --apk-hook
+
+For the short names (`fixcups`, `cupsok`):
+
+  sudo cups-stackfix --commands
 EOF
 }
 
@@ -115,6 +133,8 @@ while [ $# -gt 0 ]; do
     --no-enable) enable=0 ;;
     --apk-hook)     apk=install ;;
     --no-apk-hook)  apk=remove ;;
+    --commands)     cmds=install ;;
+    --no-commands)  cmds=remove ;;
     --boot-hook)    boot=install ;;
     --no-boot-hook) boot=remove ;;
     -h|--help)   usage; exit 0 ;;
@@ -257,6 +277,45 @@ remove_apk_hook() {
 }
 
 # ---------------------------------------------------------------------------
+# Short names (fixcups, cupsok) - real executables, not aliases
+#
+# Aliases live only in the shell that read the file defining them; on Alpine
+# that is ~/.profile, i.e. login shells only.  An executable on PATH works in
+# every shell, in scripts, and for every user, with no re-login.
+# ---------------------------------------------------------------------------
+write_command() {
+  target=$1
+  extra=$2
+  cat > "$target" <<EOF
+#!/bin/sh
+# Installed by 'cups-stackfix --commands'.
+# CUPS musl thread-stack fix: https://github.com/vinod2807/musl-printing-stack
+exec "$SELF" $extra "\$@"
+EOF
+  chmod 0755 "$target" || die "cannot chmod $target"
+}
+
+install_commands() {
+  [ -d "$BIN_DIR" ] || mkdir -p "$BIN_DIR" || die "cannot create $BIN_DIR"
+  write_command "$BIN_DIR/fixcups" ""
+  write_command "$BIN_DIR/cupsok" "--check"
+  say "cups-stackfix: installed $BIN_DIR/fixcups and $BIN_DIR/cupsok"
+}
+
+remove_commands() {
+  for c in fixcups cupsok; do
+    f="$BIN_DIR/$c"
+    [ -e "$f" ] || continue
+    if grep -q 'musl-printing-stack' "$f" 2>/dev/null; then
+      rm -f "$f"
+      say "cups-stackfix: removed $f"
+    else
+      say "cups-stackfix: $f is not ours - leaving it alone"
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------
 # Go
 # ---------------------------------------------------------------------------
 ensure_fix
@@ -278,6 +337,11 @@ esac
 case "$apk" in
   install) install_apk_hook ;;
   remove)  remove_apk_hook ;;
+esac
+
+case "$cmds" in
+  install) install_commands ;;
+  remove)  remove_commands ;;
 esac
 
 say "cups-stackfix: done"
