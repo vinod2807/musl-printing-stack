@@ -116,6 +116,7 @@ stack is exhausted → SIGSEGV.
 | [`evidence/dmesg-cupsd-and-ipp-noshim.txt`](evidence/dmesg-cupsd-and-ipp-noshim.txt) | **shim-free run**: `cupsd` ×2 and `ipp` ×1, all at libcups offset `0x3074d`, with the kernel's own `Code:` dump of the faulting probe |
 | [`evidence/error-log-job7-noshim.txt`](evidence/error-log-job7-noshim.txt) | **shim-free job**: `status -11 (crashed)`, queue paused, nothing reached the printer |
 | [`docs/CLEAN-REINSTALL-TEST.md`](docs/CLEAN-REINSTALL-TEST.md) | clean-reinstall A/B procedure and results |
+| [`docs/APK-HOOK-TEST.md`](docs/APK-HOOK-TEST.md) | proof that the apk commit hook self-repairs, and that healthy transactions stay a no-op |
 
 The faulting instruction (`ip = libcups+0x3074d`) is the compiler's stack-clash
 probe inside `httpPrintf`:
@@ -140,22 +141,56 @@ usable stack WITH shim:    8204 KiB
 ## Fixes / workarounds
 
 Whichever you choose, the bundled [`fix-cups-stack.sh`](fix-cups-stack.sh)
-(= `cups-stackfix`) keeps the workaround alive and is meant to be re-run after
-every `apk upgrade cups`:
+(= `cups-stackfix`) keeps the workaround alive:
 
 ```sh
+# install the command once
+sudo ln -sf "$PWD/fix-cups-stack.sh" /usr/local/bin/cups-stackfix
+
+# and then never think about it again: apk runs this hook after every
+# transaction, so a `cups` upgrade repairs itself before anything can fail
+sudo cups-stackfix --apk-hook
+
+# ...or, if you would rather do it by hand every time
 sudo cups-stackfix              # (re-)apply the fix; re-enable paused queues
 cups-stackfix --check           # is it still active?  exit 0 = yes, 1 = clobbered
-sudo cups-stackfix --boot-hook  # optional: also self-heal on every boot
+sudo cups-stackfix --boot-hook  # alternative self-heal, at boot instead of at apk time
 ```
 
-It is idempotent (a no-op when the fix is already active), rebuilds from source
-when a compiler is present, falls back to a cached build when one is not, and
-re-enables any queue that CUPS paused.  Install it with:
+### Why `apk upgrade cups` breaks it, and how the hook fixes that
 
-```sh
-sudo ln -sf "$PWD/fix-cups-stack.sh" /usr/local/bin/cups-stackfix
+`/usr/lib/cups/backend/ipp` is **owned by the `cups` package**. The workaround
+wraps that file, so a `cups` upgrade unpacks the stock backend straight over the
+wrapper — silently, with no `.apk-new`, because the path is not a protected
+config path. The next print then fails exactly as before, which is why "just
+patch it once" is not good enough on a rolling/upgraded system.
+
+`cups-stackfix --apk-hook` installs
+[`hooks/apk-commit-hook-cups-stackfix.sh`](hooks/apk-commit-hook-cups-stackfix.sh)
+as `/etc/apk/commit_hooks.d/cups-stackfix`. apk runs commit hooks after every
+transaction (the stage arrives as `$1`), so the hook:
+
+1. exits immediately on `pre-commit`;
+2. runs `cups-stackfix --check --quiet` — a couple of file tests — and exits if
+   all is well, so healthy transactions stay a **true no-op** (no log spam, no
+   `cupsd` restart);
+3. otherwise re-applies the fix and appends to `/var/log/cups-stackfix.log`;
+4. always exits 0, so it can never fail an apk transaction.
+
+Verified here against a real `apk fix cups`, which is the same file-overwriting
+transaction as an upgrade:
+
 ```
+BEFORE   cups-stackfix --check   rc=0   (healthy)
+         apk fix cups            (Reinstalling cups 2.4.19-r0 -> wrapper overwritten)
+AFTER    cups-stackfix --check   rc=0   (health restored by the hook)
+         /var/log/cups-stackfix.log: "apk transaction left the CUPS thread-stack fix broken - re-applying"
+queue    EPSON_L3260_ALPINE unchanged, still idle/enabled (printers.conf hash identical)
+```
+
+The script is idempotent (a no-op when the fix is already active), rebuilds from
+source when a compiler is present, falls back to a cached build when one is not,
+and re-enables any queue that CUPS paused.
 
 ### 1. Upstream patch — recommended
 

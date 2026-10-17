@@ -54,7 +54,15 @@ usable stack WITH shim:    8204 KiB
   the queue goes back to being paused with `status -11 (crashed)`.
   Run `../../scripts/check-stackfix.sh` to test, then re-run `install.sh` to
   repair — or just use the top-level `fix-cups-stack.sh` (= `cups-stackfix`),
-  which detects and repairs in one step.
+  which detects and repairs in one step.  To stop thinking about it entirely:
+
+  ```sh
+  sudo cups-stackfix --apk-hook
+  ```
+
+  which installs `hooks/apk-commit-hook-cups-stackfix.sh` into
+  `/etc/apk/commit_hooks.d/`, so every apk transaction re-checks and re-arms
+  this workaround by itself.
 * `install.sh` writes `ipp.real` via a temporary file + rename.  Writing onto it
   directly fails with `ETXTBSY` ("Text file busy") whenever a backend process is
   still executing it, which is common right after an upgrade.

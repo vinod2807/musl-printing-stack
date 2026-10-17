@@ -26,9 +26,16 @@
 #   cups-stackfix                 re-apply the fix, re-enable paused queues
 #   cups-stackfix --check         report only; exit 0 if the fix is active
 #   cups-stackfix --no-enable     do not re-enable paused queues
+#   cups-stackfix --apk-hook      install the apk commit hook (do it once!)
+#   cups-stackfix --no-apk-hook   remove that hook
 #   cups-stackfix --boot-hook     also install a boot-time self-heal
 #   cups-stackfix --no-boot-hook  remove that boot-time self-heal
 #   cups-stackfix -q|--quiet      less chatty
+#
+# IF YOU NEVER WANT TO THINK ABOUT THIS AGAIN
+#   sudo cups-stackfix --apk-hook
+#   ...and then `apk upgrade cups` repairs itself, because apk runs the hook
+#   after every transaction.  See hooks/apk-commit-hook-cups-stackfix.sh.
 #
 # Upstream bug:    https://github.com/OpenPrinting/cups/issues/1766
 # This repository: https://github.com/vinod2807/musl-printing-stack
@@ -47,10 +54,15 @@ MARKER=cups-thread-stackfix-wrapper
 LOCALD_DIR=${LOCALD_DIR:-/etc/local.d}
 HOOK_NAME=cups-stackfix.start
 
+APK_HOOK_DIR=${APK_HOOK_DIR:-/etc/apk/commit_hooks.d}
+APK_HOOK_NAME=cups-stackfix
+APK_HOOK_SRC="$ROOT/hooks/apk-commit-hook-cups-stackfix.sh"
+
 mode=fix
 quiet=0
 enable=1
 boot=0
+apk=0
 
 usage() {
   cat <<'EOF'
@@ -59,13 +71,18 @@ cups-stackfix - re-apply the musl thread-stack workaround for CUPS
   cups-stackfix                 re-apply the fix, re-enable paused queues
   cups-stackfix --check         report only; exit 0 if the fix is active
   cups-stackfix --no-enable     do not re-enable paused queues
+  cups-stackfix --apk-hook      install the apk commit hook (do it once!)
+  cups-stackfix --no-apk-hook   remove that hook
   cups-stackfix --boot-hook     also install a boot-time self-heal
   cups-stackfix --no-boot-hook  remove that boot-time self-heal
   cups-stackfix -q|--quiet      less chatty
   cups-stackfix -h|--help       this text
 
-Run it again after every `apk upgrade cups`, which silently overwrites the
-wrapper this fix relies on.
+`apk upgrade cups` silently overwrites the wrapper this fix relies on, so it
+has to be re-applied.  Either run this script again, or install the hook once
+and let it repair itself:
+
+  sudo cups-stackfix --apk-hook
 EOF
 }
 
@@ -96,6 +113,8 @@ while [ $# -gt 0 ]; do
     --check)     mode=check ;;
     -q|--quiet)  quiet=1 ;;
     --no-enable) enable=0 ;;
+    --apk-hook)     apk=install ;;
+    --no-apk-hook)  apk=remove ;;
     --boot-hook)    boot=install ;;
     --no-boot-hook) boot=remove ;;
     -h|--help)   usage; exit 0 ;;
@@ -208,6 +227,36 @@ remove_boot_hook() {
 }
 
 # ---------------------------------------------------------------------------
+# apk commit hook - the "never think about it again" option
+#
+# apk runs these after every transaction (stage as $1), so a cups upgrade
+# repairs itself before anything can fail.
+# ---------------------------------------------------------------------------
+apk_hook_path() {
+  printf '%s/%s' "$APK_HOOK_DIR" "$APK_HOOK_NAME"
+}
+
+install_apk_hook() {
+  [ -f "$APK_HOOK_SRC" ] || die "hook source not found: $APK_HOOK_SRC"
+  [ -d "$APK_HOOK_DIR" ] || mkdir -p "$APK_HOOK_DIR" || die "cannot create $APK_HOOK_DIR"
+
+  hook=$(apk_hook_path)
+  install -m 0755 "$APK_HOOK_SRC" "$hook" || die "cannot install $hook"
+  say "cups-stackfix: installed apk commit hook $hook"
+  say "               (apk will now re-apply the fix by itself after any upgrade)"
+}
+
+remove_apk_hook() {
+  hook=$(apk_hook_path)
+  if [ -e "$hook" ]; then
+    rm -f "$hook"
+    say "cups-stackfix: removed apk commit hook $hook"
+  else
+    say "cups-stackfix: no apk commit hook installed"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Go
 # ---------------------------------------------------------------------------
 ensure_fix
@@ -224,6 +273,11 @@ fi
 case "$boot" in
   install) install_boot_hook ;;
   remove)  remove_boot_hook ;;
+esac
+
+case "$apk" in
+  install) install_apk_hook ;;
+  remove)  remove_apk_hook ;;
 esac
 
 say "cups-stackfix: done"
